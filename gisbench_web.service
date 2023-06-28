@@ -1,0 +1,14 @@
+[Unit]
+Description = GIS Bench Web
+Requires=network-online.target
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart = /usr/bin/python3 /opt/gisbench_web/gisbench_web.py
+Restart = always
+User = cloud-user
+Type = simple
+
+[Install]
+WantedBy = multi-user.target

@@ -1,0 +1,334 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+       integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="
+       crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+       integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM="
+       crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+      function getResourceTiming(url) {
+        if (!window.performance) return null;
+        if (!performance.getEntriesByName) return null;
+        const resources = performance.getEntriesByName(url, "resource");
+        return resources[resources.length - 1];
+      }
+
+      function getJson(q, pgflag, g, n) {
+        const msgDiv = document.getElementById("msg");
+        const mapDiv = document.getElementById("map" + n);
+        const restimeDiv = document.getElementById("restime" + n);
+        const outputDiv = document.getElementById("output" + n);
+        let searchUrl = "/search?q=" + q + "&gist=" + g;
+        let xhr = new XMLHttpRequest();
+        let map = L.map("map" + n).setView([35.6895014, 139.6917337], 12);
+        let layerUrl, layerCopyright;
+        let wholeFlag = (q.match(/全域/)) ? true : false;
+
+        if (wholeFlag) {
+          mapDiv.style.display = "none";
+        }
+
+        msgDiv.innerHTML = "<div>Now searching...</div>";
+        if (!(pgflag)) {
+          searchUrl = searchUrl + "&pg_strom=off";
+        }
+        if (document.getElementById("layerMap").value == "gsi") {
+          layerUrl = "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png";
+          layerCopyright = "";
+        } else {
+          layerUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+          layerCopyright = '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+        }
+
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState == 4) {
+            if (xhr.status == 200) {
+              const resource = getResourceTiming(xhr.responseURL);
+              let data = JSON.parse(xhr.responseText);  
+              let avelat = 0;
+              let avelon = 0;
+
+              L.tileLayer(layerUrl, {
+                maxZoom: 18,
+                attribution: layerCopyright 
+              }).addTo(map);
+
+              if (resource) {
+                resultTime = resource.responseEnd - resource.requestStart;
+                restimeDiv.innerHTML += '<div style="margin: 1em">Response Time = ' + resultTime + ' ms</div>';
+                let t1 = parseFloat(document.getElementById("restime1").textContent.split('=')[1]);
+                let t2 = parseFloat(document.getElementById("restime2").textContent.split('=')[1]);
+                if (!isNaN(t1) && !(isNaN(t2))) {
+                  diff_t = Math.round((t1 - t2) * 100) / 100;
+                  diff_p = Math.round((t2 / t1) * 10000) / 100;
+                  diff_html = '<div>Diff time = ' + diff_t + 'ms (' + diff_p + '%)</div>';
+                  document.getElementById("timeDiff").innerHTML = diff_html;
+                }
+              }
+
+              for (i = 0; i < data.length; i++) {
+                if (data[i] != null) {
+                  if (wholeFlag) {
+                    outputDiv.innerHTML += '<div class="result_row"><div class="result_item">' + data[i][0] + '</div><div class="result_item">' + data[i][1] + '</div></div>';
+                  } else {
+                    outputDiv.innerHTML += "<div>ID: " + data[i][0] + ", 緯度: " + data[i][2] + ", 経度: " + data[i][1] + "</div>";
+                    L.marker([data[i][2], data[i][1]], { title: "ID: " + data[i][0] }).addTo(map);
+                    avelat = avelat + parseFloat(data[i][2]);
+                    avelon = avelon + parseFloat(data[i][1]);
+                  }
+                }
+              }
+              avelat = avelat / data.length;
+              avelon = avelon / data.length;
+              if (!(isNaN(avelat)) && !(isNaN(avelon))) {
+                map.setView([avelat, avelon]);
+              }
+              msgDiv.innerHTML = '<div style="margin: 1em;"><input id="restart_button" type="button" value="再実行" onclick="location.reload();"></div>';
+
+            } else {
+              msgDiv.innerHTML = "<div>Data load error.</div>";
+            }
+          }
+        };
+        xhr.open("GET", searchUrl);
+        xhr.send();
+      }
+
+      async function getGraph() {
+        const ctx = document.getElementById("usageGraph");
+        const ctc = document.getElementById("graphCaption");
+        const usageUrl = '/usage';
+        let u_xhr = new XMLHttpRequest();
+        let lc = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [-9, -8, -7, -6, -5, -4, -3, -2, -1, 0],
+            datasets: [
+              {
+                label: 'CPU使用率',
+                borderColor: '#79f',
+                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              }, {
+                label: 'CPUコア 最大使用率',
+                borderColor: '#f88',
+                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              }, {
+                label: 'GPU使用率',
+                borderColor: '#4d6',
+                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              }
+            ]
+          }, 
+          options: {
+            animation: false,
+            title: {
+              display: true,
+              position: 'top',
+              text: 'CPU/GPU使用率'
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                title: {
+                  display: true,
+                  text: '使用率(%)'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: '秒'
+                }
+              }
+            }
+          }
+        });
+
+        u_xhr.onreadystatechange = function () {
+          if (u_xhr.readyState == 4) {
+            if (u_xhr.status == 200) {
+              const u_res = getResourceTiming(u_xhr.responseURL);
+              let u_values = JSON.parse(u_xhr.responseText);
+
+              ctc.innerHTML = "";
+              ctx.style.display = "block";
+              if (u_res) {
+                lc.data.labels = u_values[0];
+                lc.data.datasets[0].data = u_values[1]; 
+                lc.data.datasets[1].data = u_values[2];
+                lc.data.datasets[2].data = u_values[3];
+                lc.update();
+              }
+            } else {
+              ctc.innerHTML = "<div>CPU/GPU 使用率データ取得エラー(" + u_xhr.status + ")</div>";
+              ctx.style.display = "none";
+            }
+          }
+        };
+
+        while(1) {
+          u_xhr.open("GET", usageUrl);
+          u_xhr.send();
+          await new Promise(function(resolve, reject){
+            setTimeout(resolve, 1000);
+          });
+        }
+      }
+
+      function areaFormChange() {
+        anyareaForm = document.getElementById("anyareaSearch");
+        if (document.getElementById("area").value == "any") {
+          anyareaForm.style.display = "inline";
+        } else {
+          anyareaForm.value = "";
+          anyareaForm.style.display = "none";
+        }
+      }
+
+      function execDemo() {
+        const htmlEnableTitle = '<div>PG-Strom 使用</div>';
+        const htmlDisableTitle = '<div>PG-Strom 未使用</div>';
+        const pgsFlag = document.getElementById("pg_strom").value;
+        const gist = document.getElementById("gist").value;
+
+        document.getElementById("controller").style.display = "none";
+        document.getElementById("result1").style.border = "outset";
+        q = document.getElementById("area").value;
+        if (q == "any") {
+          q = document.getElementById("anyarea").value;
+        }
+
+        document.getElementById("graph").style.display = "block";
+        getGraph();
+
+        if (pgsFlag == "on") {
+          document.getElementById("title1").innerHTML = htmlEnableTitle;
+          getJson(q, true, gist, "1");
+        } else {
+          if (gist == "no" && q.match(/全域/)) {
+            alert("「PG-Strom:無効 GiSTインデックス:なし」で全域検索すると、検索時間が数時間かかるため処理を中止します");
+            location.reload();
+          } else {
+            document.getElementById("title1").innerHTML = htmlDisableTitle;
+            getJson(q, false, gist, "1");
+            if (pgsFlag == "both") {
+              document.getElementById("title2").innerHTML = htmlEnableTitle;
+              document.getElementById("result2").style.border = "outset";
+              getJson(q, true, gist, "2");
+            }
+          }
+        }
+      }
+
+      window.onload = function () {
+        document.getElementById("form").reset();
+      }
+    </script>
+
+    <style type="text/css">
+      .title {
+        margin: 1em;
+        text-align: center;
+      }
+      .map {
+        height: 350px;
+        width: 500px;
+        margin: 1em;
+      }
+      .output {
+        margin: 1em;
+      }
+      .result {
+        min-width: 500px;
+      }
+      .result_row {
+        display: flex;
+      }
+      .result_item {
+        width: 160px;
+      }
+      #wrap {
+        display: flex;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="overview">
+      <h1>PG-Strom ST_Contains() 実行デモ</h1>
+      <p>日本全国にランダムにバラ撒かれた1000万件のPointデータから、指定した区域に含まれるデータを抽出します。</p>
+    </div>
+    <div id="controller">
+      <div style="margin: 1em;">
+        <form id="form">
+          <label>エリア : </label>
+          <select id="area" onchange="areaFormChange()">
+            <option value="日本全域">日本全域</option>
+            <option value="北海道全域">北海道全域</option>
+            <option value="愛知県全域">愛知県全域</option>
+            <option value="静岡県全域">静岡県全域</option>
+            <option value="東京都全域">東京都全域</option>
+            <option value="新宿区" selected>東京都新宿区</option>
+            <option value="渋谷区">東京都渋谷区</option>
+            <option value="豊島区">東京都豊島区</option>
+            <option value="千代田区">東京都千代田区</option>
+            <option value="白石区">札幌市白石区</option>
+            <option value="豊平区">札幌市豊平区</option>
+            <option value="any">任意の地域</option>
+          </select>
+          <div id="anyareaSearch" style="display:none;">
+            <input id="anyarea" type="text"><br/>
+            <li>政令指定都市は検索対象外（札幌市、横浜市、千葉市など）</li>
+            <li>「〇〇県全域」と入力すると全域検索モード</li>
+          </div>
+          <br />
+          <label >地図の選択 : </label>
+          <select id="layerMap">
+            <option value="osm">OpenStreetMap</option>
+            <option value="gsi">国土地理院 標準地図</option>
+          </select>
+          <br />
+          <label>PG-Strom : </label>
+          <select id="pg_strom">
+            <option value="on">使用</option>
+            <option value="off">未使用</option>
+            <option value="both" selected>比較</option>
+          </select>
+          <br />
+          <label>GiSTインデックス: </label>
+          <select id="gist">
+            <option value="yes">あり</option>
+            <option value="no">なし</option>
+          </select>
+        </div>
+        <div style="margin: 1em">
+          <input id="dataGet_button" type="button" value="データ読込" onclick="execDemo();" />
+        </div>
+      </form>
+    </div>
+    <div id="msg"></div>
+    <div id="graphCaption"></div>
+    <div id="graph" style="height:240px;display:none;">
+      <canvas id="usageGraph" width="1024" height="240"></canvas>
+    </div>
+    <div id="timeDiff"></div>
+    <div id="wrap">
+      <div class="result" id="result1">
+        <div class="title" id="title1"></div>
+        <div class="map" id="map1"></div>
+        <div id="restime1"></div>
+        <div class="output" id="output1"></div>
+      </div>
+      <div class="result" id="result2">
+        <div class="title" id="title2"></div>
+        <div class="map" id="map2"></div>
+        <div id="restime2"></div>
+        <div class="output" id="output2"></div>
+      </div>
+    </div>
+  </body>
+</html>
